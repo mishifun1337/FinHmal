@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Облік витрат і доходів</title>
+<meta name="color-scheme" content="light dark">
+<script>try { var t = localStorage.getItem('theme-v1'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+<style>
+  /* Базова палітра */
+  :root {
+    color-scheme: light;
+    --bg: #f4f2ee; --panel: #ffffff; --text: #2b2b2b; --muted: #6b6b6b;
+    --border: #e2ded6; --accent: #2f6f62; --accent-hover: #255a4f; --on-accent: #ffffff;
+    --danger: #b3412f; --danger-border: #e8c5be; --field: #ffffff; --track: #e8e5df;
+    --radius: 14px;
+  }
+  /* Темна тема: за системним налаштуванням, якщо користувач не обрав тему вручну */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #151715; --panel: #1f221f; --text: #e9e7e2; --muted: #a3a099;
+      --border: #343936; --accent: #5bb8a3; --accent-hover: #77c8b5; --on-accent: #0f1f1b;
+      --danger: #f08672; --danger-border: #6e3a32; --field: #171a17; --track: #333835;
+    }
+  }
+  /* Темна тема, обрана вручну */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #151715; --panel: #1f221f; --text: #e9e7e2; --muted: #a3a099;
+    --border: #343936; --accent: #5bb8a3; --accent-hover: #77c8b5; --on-accent: #0f1f1b;
+    --danger: #f08672; --danger-border: #6e3a32; --field: #171a17; --track: #333835;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; }
+  header { padding: 24px 20px 8px; max-width: 1100px; margin: 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { margin: 0; font-size: 1.6rem; }
+  h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  .layout { max-width: 1100px; margin: 0 auto; padding: 16px 20px 40px;
+    display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; }
+  .field { display: flex; flex-direction: column; margin-bottom: 12px; }
+  label { font-size: .9rem; color: var(--muted); margin-bottom: 4px; }
+  input, select { font: inherit; padding: 9px 11px; border: 1px solid var(--border);
+    border-radius: 9px; background: var(--field); color: var(--text); }
+  button { font: inherit; cursor: pointer; border-radius: 9px; padding: 9px 14px;
+    border: 1px solid var(--border); background: var(--field); color: var(--text); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  button.primary:hover { background: var(--accent-hover); }
+  button.danger { color: var(--danger); border-color: var(--danger-border); }
+  button.small { padding: 5px 10px; font-size: .85rem; }
+  /* Видимий фокус для клавіатури */
+  :focus-visible { outline: 3px solid #e0a43a; outline-offset: 2px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .error { color: var(--danger); min-height: 1.5em; margin-top: 8px; font-size: .9rem; }
+  .hint { font-size: .8rem; color: var(--muted); text-align: right; }
+  .total { font-size: 2.4rem; font-weight: 700; margin: 0; }
+  .total-label { color: var(--muted); font-size: .9rem; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--border); }
+  th:not(:first-child), td:not(:first-child) { text-align: right; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+  .chart-wrap { display: flex; justify-content: center; padding: 8px 0; }
+  .chart { width: 200px; height: 200px; border-radius: 50%; position: relative; background: var(--track); }
+  .chart::after { content: ""; position: absolute; inset: 40px; background: var(--panel); border-radius: 50%; }
+  .chart-center { position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 1; }
+  .chart-center strong { font-size: 1.8rem; line-height: 1; }
+  .chart-center span { color: var(--muted); font-size: .85rem; }
+  ul.list { list-style: none; padding: 0; margin: 0; }
+  ul.list li { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .item-cat { font-weight: 600; }
+  .item-meta { color: var(--muted); font-size: .88rem; word-break: break-word; }
+  .item-sum { font-weight: 700; text-align: right; white-space: nowrap; }
+  .item-actions { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .empty { color: var(--muted); padding: 16px 0; }
+  /* Перемикач розділів і баланс */
+  .tabs { max-width: 1100px; margin: 0 auto; padding: 8px 20px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tabs button { padding: 8px 20px; border-radius: 999px; }
+  .tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .total.neg { color: var(--danger); }
+  .bal-rows { margin-top: 12px; }
+  .bal-rows > div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); }
+  input[type="color"] { width: 72px; height: 42px; padding: 3px; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  .budget-head h2 { margin: 0; }
+  .bal-rows .strong { font-weight: 700; }
+  .bal-rows .neg { color: var(--danger); }
+  /* Місячний бюджет */
+  [hidden] { display: none !important; }
+  .budget { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .budget-row { display: flex; gap: 8px; }
+  .budget-row input { flex: 1; min-width: 0; }
+  .budget-extra { display: flex; gap: 8px; margin-top: 8px; }
+  .budget-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .budget-title { font-size: .9rem; color: var(--muted); }
+  .bar { height: 12px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .3s ease; }
+  .bar.over .bar-fill { background: var(--danger); }
+  .budget-text { display: flex; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; margin-top: 8px; font-size: .9rem; }
+  .budget-left { color: var(--muted); }
+  .budget-text.over { color: var(--danger); }
+  .budget-text.over .budget-left { color: var(--danger); font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { .bar-fill { transition: none; } }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Облік витрат і доходів</h1>
+  <button type="button" id="theme-toggle" class="small">Темна тема</button>
+</header>
+<div class="tabs" role="group" aria-label="Розділ">
+  <button type="button" id="tab-expense" aria-pressed="true">Витрати</button>
+  <button type="button" id="tab-income" aria-pressed="false">Доходи</button>
+  <button type="button" id="tab-rec" aria-pressed="false">Регулярні</button>
+  <button type="button" id="tab-cat" aria-pressed="false">Категорії</button>
+  <button type="button" id="tab-data" aria-pressed="false">Дані</button>
+</div>
+
+<main class="layout" id="main-view">
+  <div class="col">
+    <!-- Форма додавання (без тегу form) -->
+    <section class="panel" aria-labelledby="form-title">
+      <h2 id="form-title">Нова витрата</h2>
+      <div class="field">
+        <label for="amount">Сума, грн</label>
+        <input id="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label for="category">Категорія</label>
+        <select id="category"><option value="">— Оберіть категорію —</option></select>
+      </div>
+      <div class="field">
+        <label for="date">Дата</label>
+        <input id="date" type="date">
+      </div>
+      <div class="field">
+        <label for="note">Нотатка (необов'язково)</label>
+        <input id="note" type="text" maxlength="80" placeholder="Наприклад: обід">
+        <div class="hint"><span id="note-count">0</span>/80</div>
+      </div>
+      <div class="actions">
+        <button type="button" id="save-btn" class="primary">Додати</button>
+        <button type="button" id="cancel-btn" hidden>Скасувати</button>
+      </div>
+      <div id="error" class="error" role="alert"></div>
+    </section>
+
+    <!-- Підсумок -->
+    <section class="panel" aria-labelledby="sum-title">
+      <h2 id="sum-title" class="total-label">Загальна сума</h2>
+      <p class="total" id="total">0,00 грн</p>
+
+      <!-- Місячний бюджет -->
+      <div class="budget" id="budget">
+        <div id="budget-form">
+          <label for="budget-input">Місячний бюджет, грн</label>
+          <div class="budget-row">
+            <input id="budget-input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Наприклад: 10000">
+            <button type="button" id="budget-save" class="primary">Встановити</button>
+          </div>
+          <div class="budget-extra">
+            <button type="button" id="budget-cancel" class="small" hidden>Скасувати</button>
+            <button type="button" id="budget-clear" class="small danger" hidden>Прибрати бюджет</button>
+          </div>
+          <div id="budget-error" class="error" role="alert"></div>
+        </div>
+        <div id="budget-view" hidden>
+          <div class="budget-head">
+            <span class="budget-title" id="budget-title"></span>
+            <button type="button" id="budget-edit" class="small">Змінити</button>
+          </div>
+          <div class="bar" id="budget-bar" role="progressbar" aria-label="Використання місячного бюджету"
+               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="bar-fill" id="budget-fill"></div>
+          </div>
+          <div class="budget-text" id="budget-text">
+            <span id="budget-spent"></span>
+            <span class="budget-left" id="budget-left"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Баланс -->
+    <section class="panel" aria-labelledby="bal-title">
+      <h2 id="bal-title" class="total-label">Баланс · <span id="bal-period"></span></h2>
+      <p class="total" id="balance">0,00 грн</p>
+      <div class="bal-rows">
+        <div><span><span class="dot" style="background:var(--accent)"></span>Доходи</span><span id="bal-income">0,00 грн</span></div>
+        <div><span><span class="dot" style="background:var(--danger)"></span>Витрати</span><span id="bal-expense">0,00 грн</span></div>
+      </div>
+    </section>
+
+    <!-- Підсумок за тиждень -->
+    <section class="panel" aria-labelledby="week-title">
+      <div class="budget-head">
+        <h2 id="week-title" class="total-label">Тиждень · <span id="week-period"></span></h2>
+        <span class="actions">
+          <button type="button" id="week-prev" class="small" aria-label="Попередній тиждень">‹</button>
+          <button type="button" id="week-next" class="small" aria-label="Наступний тиждень">›</button>
+        </span>
+      </div>
+      <div class="bal-rows">
+        <div><span><span class="dot" style="background:var(--danger)"></span>Витрати</span><span id="week-expense">0,00 грн</span></div>
+        <div><span><span class="dot" style="background:var(--accent)"></span>Доходи</span><span id="week-income">0,00 грн</span></div>
+        <div class="strong"><span>Залишок</span><span id="week-balance">0,00 грн</span></div>
+      </div>
+    </section>
+
+    <!-- Діаграма і таблиця категорій -->
+    <section class="panel" aria-labelledby="cat-title">
+      <h2 id="cat-title">За категоріями</h2>
+      <div class="chart-wrap">
+        <div class="chart" id="chart" role="img" aria-label="Кругова діаграма категорій">
+          <div class="chart-center"><strong id="chart-count">0</strong><span>записів</span></div>
+        </div>
+      </div>
+      <div id="cat-table"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <!-- Фільтри -->
+    <section class="panel" aria-labelledby="filter-title">
+      <h2 id="filter-title">Фільтри</h2>
+      <div class="filters">
+        <div class="field">
+          <label for="filter-cat">Категорія</label>
+          <select id="filter-cat"><option value="">Усі категорії</option></select>
+        </div>
+        <div class="field">
+          <label for="filter-month">Місяць</label>
+          <select id="filter-month"><option value="">Усі місяці</option></select>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="field">
+          <label for="filter-from">Від</label>
+          <input id="filter-from" type="date">
+        </div>
+        <div class="field">
+          <label for="filter-to">До</label>
+          <input id="filter-to" type="date">
+        </div>
+      </div>
+      <button type="button" id="filter-reset" class="small" hidden>Скинути діапазон дат</button>
+    </section>
+
+    <!-- Список витрат -->
+    <section class="panel" aria-labelledby="list-title">
+      <h2 id="list-title">Витрати</h2>
+      <ul class="list" id="list"></ul>
+      <div class="empty" id="empty"></div>
+    </section>
+  </div>
+</main>
+
+<!-- Регулярні платежі -->
+<main class="layout" id="rec-view" hidden>
+  <div class="col">
+    <section class="panel" aria-labelledby="rec-form-title">
+      <h2 id="rec-form-title">Новий регулярний платіж</h2>
+      <div class="field">
+        <label for="rec-amount">Сума, грн</label>
+        <input id="rec-amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label for="rec-category">Категорія</label>
+        <select id="rec-category"><option value="">— Оберіть категорію —</option></select>
+      </div>
+      <div class="field">
+        <label for="rec-day">День місяця</label>
+        <input id="rec-day" type="number" min="1" max="31" step="1" inputmode="numeric" placeholder="Наприклад: 5">
+        <div class="item-meta">Платіж додається у витрати щомісяця автоматично, починаючи з найближчого такого дня. У коротких місяцях — в останній день.</div>
+      </div>
+      <div class="field">
+        <label for="rec-note">Назва (необов'язково)</label>
+        <input id="rec-note" type="text" maxlength="80" placeholder="Наприклад: оренда">
+      </div>
+      <div class="actions">
+        <button type="button" id="rec-save" class="primary">Додати</button>
+        <button type="button" id="rec-cancel" hidden>Скасувати</button>
+      </div>
+      <div id="rec-error" class="error" role="alert"></div>
+    </section>
+  </div>
+  <div class="col">
+    <section class="panel" aria-labelledby="rec-list-title">
+      <h2 id="rec-list-title">Регулярні платежі</h2>
+      <div class="item-meta" id="rec-total"></div>
+      <ul class="list" id="rec-list"></ul>
+      <div class="empty" id="rec-empty"></div>
+    </section>
+  </div>
+</main>
+
+<!-- Власні категорії -->
+<main class="layout" id="cat-view" hidden>
+  <div class="col">
+    <section class="panel" aria-labelledby="cat-form-title">
+      <h2 id="cat-form-title">Нова категорія</h2>
+      <div class="field">
+        <label for="cat-kind">Тип</label>
+        <select id="cat-kind"><option value="expense">Витрати</option><option value="income">Доходи</option></select>
+      </div>
+      <div class="field">
+        <label for="cat-name">Назва</label>
+        <input id="cat-name" type="text" maxlength="30" placeholder="Наприклад: Тварини">
+      </div>
+      <div class="field">
+        <label for="cat-color">Колір</label>
+        <input id="cat-color" type="color" value="#3f9e8a">
+      </div>
+      <div class="actions">
+        <button type="button" id="cat-save" class="primary">Додати</button>
+        <button type="button" id="cat-cancel" hidden>Скасувати</button>
+      </div>
+      <div id="cat-error" class="error" role="alert"></div>
+    </section>
+  </div>
+  <div class="col">
+    <section class="panel" aria-labelledby="cat-exp-title">
+      <h2 id="cat-exp-title">Категорії витрат</h2>
+      <ul class="list" id="cat-list-expense"></ul>
+    </section>
+    <section class="panel" aria-labelledby="cat-inc-title">
+      <h2 id="cat-inc-title">Категорії доходів</h2>
+      <ul class="list" id="cat-list-income"></ul>
+    </section>
+  </div>
+</main>
+
+<!-- Резервна копія та експорт -->
+<main class="layout" id="data-view" hidden>
+  <div class="col">
+    <section class="panel" aria-labelledby="bk-title">
+      <h2 id="bk-title">Резервна копія</h2>
+      <p class="item-meta">Усі дані (витрати, доходи, регулярні платежі, категорії, бюджет) одним JSON-файлом. Зберігайте копію після змін і перед очищенням браузера. Дані лише в цьому браузері, тож копія — єдиний спосіб перенести їх на інший пристрій.</p>
+      <div class="actions">
+        <button type="button" id="bk-export" class="primary">Зберегти копію</button>
+        <button type="button" id="bk-import">Відновити з файлу…</button>
+      </div>
+      <input type="file" id="bk-file" accept=".json,application/json" hidden>
+      <div id="bk-confirm" hidden>
+        <p id="bk-summary"></p>
+        <div class="actions">
+          <button type="button" id="bk-yes" class="danger">Замінити дані</button>
+          <button type="button" id="bk-no">Скасувати</button>
+        </div>
+      </div>
+      <div id="bk-msg" aria-live="polite"></div>
+    </section>
+  </div>
+  <div class="col">
+    <section class="panel" aria-labelledby="csv-title">
+      <h2 id="csv-title">Таблиця (CSV)</h2>
+      <p class="item-meta">Усі витрати й доходи для Excel або Google Таблиць. Це лише експорт: назад із CSV дані не завантажуються.</p>
+      <div class="actions">
+        <button type="button" id="csv-export" class="primary">Завантажити CSV</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+  // Категорії та їхні кольори
+  const CATEGORIES = [
+    { id: 'food', name: 'Їжа', color: '#d9895b' },
+    { id: 'transport', name: 'Транспорт', color: '#5b8fd9' },
+    { id: 'housing', name: 'Житло', color: '#8a6fb5' },
+    { id: 'health', name: "Здоров'я", color: '#d95b6f' },
+    { id: 'fun', name: 'Розваги', color: '#e0b43a' },
+    { id: 'study', name: 'Навчання', color: '#3f9e8a' },
+    { id: 'shopping', name: 'Покупки', color: '#c46fa8' },
+    { id: 'other', name: 'Інше', color: '#8c8c8c' }
+  ];
+  const STORAGE_KEY = 'expenses-v1';
+  const INCOME_KEY = 'incomes-v1';
+  const REC_KEY = 'recurring-v1';
+  const INCOME_CATEGORIES = [
+    { id: 'salary', name: 'Зарплата', color: '#3f9e8a' },
+    { id: 'freelance', name: 'Фріланс', color: '#5b8fd9' },
+    { id: 'invest', name: 'Інвестиції', color: '#8a6fb5' },
+    { id: 'gift', name: 'Подарунки', color: '#d95b6f' },
+    { id: 'refund', name: 'Повернення коштів', color: '#e0b43a' },
+    { id: 'other', name: 'Інше', color: '#8c8c8c' }
+  ];
+  // Власні категорії: збережений набір замінює типовий. «Інше» завжди останнє й не видаляється.
+  const CATS_KEY = 'categories-v1';
+  function applyCats(saved) {
+    if (!saved) return;
+    [[CATEGORIES, saved.expense], [INCOME_CATEGORIES, saved.income]].forEach(([target, list]) => {
+      if (!Array.isArray(list)) return;
+      const ok = list.filter(c => c && typeof c.id === 'string' && typeof c.name === 'string'
+        && c.name.trim() && /^#[0-9a-f]{6}$/i.test(c.color));
+      const other = ok.find(c => c.id === 'other') || target.find(c => c.id === 'other');
+      target.splice(0, target.length, ...ok.filter(c => c.id !== 'other'), other);
+    });
+  }
+  try { applyCats(JSON.parse(localStorage.getItem(CATS_KEY) || 'null')); } catch (e) { /* лишаємо типові категорії */ }
+  const MONTHS = ['Січень','Лютий','Березень','Квітень','Травень','Червень',
+    'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    amount: $('amount'), category: $('category'), date: $('date'), note: $('note'),
+    noteCount: $('note-count'), save: $('save-btn'), cancel: $('cancel-btn'), error: $('error'),
+    total: $('total'), chart: $('chart'), chartCount: $('chart-count'), catTable: $('cat-table'),
+    filterCat: $('filter-cat'), filterMonth: $('filter-month'), list: $('list'), empty: $('empty'),
+    budgetForm: $('budget-form'), budgetView: $('budget-view'), budgetInput: $('budget-input'),
+    budgetSave: $('budget-save'), budgetCancel: $('budget-cancel'), budgetClear: $('budget-clear'),
+    budgetError: $('budget-error'), budgetEdit: $('budget-edit'), budgetTitle: $('budget-title'),
+    budgetBar: $('budget-bar'), budgetFill: $('budget-fill'), budgetText: $('budget-text'),
+    budgetSpent: $('budget-spent'), budgetLeft: $('budget-left'),
+    tabExpense: $('tab-expense'), tabIncome: $('tab-income'), budgetBox: $('budget'),
+    formTitle: $('form-title'), sumTitle: $('sum-title'), listTitle: $('list-title'),
+    balPeriod: $('bal-period'), balance: $('balance'), balIncome: $('bal-income'), balExpense: $('bal-expense'),
+    tabRec: $('tab-rec'), mainView: $('main-view'), recView: $('rec-view'),
+    recAmount: $('rec-amount'), recCategory: $('rec-category'), recDay: $('rec-day'), recNote: $('rec-note'),
+    recSave: $('rec-save'), recCancel: $('rec-cancel'), recError: $('rec-error'),
+    recList: $('rec-list'), recEmpty: $('rec-empty'), recTotal: $('rec-total'),
+    tabCat: $('tab-cat'), catView: $('cat-view'), catKind: $('cat-kind'), catName: $('cat-name'),
+    catColor: $('cat-color'), catSave: $('cat-save'), catCancel: $('cat-cancel'), catError: $('cat-error'),
+    catListExpense: $('cat-list-expense'), catListIncome: $('cat-list-income'),
+    filterFrom: $('filter-from'), filterTo: $('filter-to'), filterReset: $('filter-reset'),
+    weekPeriod: $('week-period'), weekExpense: $('week-expense'), weekIncome: $('week-income'),
+    weekBalance: $('week-balance'), weekPrev: $('week-prev'), weekNext: $('week-next'),
+    tabData: $('tab-data'), dataView: $('data-view'), bkExport: $('bk-export'), bkImport: $('bk-import'),
+    bkFile: $('bk-file'), bkConfirm: $('bk-confirm'), bkSummary: $('bk-summary'), bkYes: $('bk-yes'),
+    bkNo: $('bk-no'), bkMsg: $('bk-msg'), csvExport: $('csv-export'),
+    themeToggle: $('theme-toggle')
+  };
+
+  let expenses = load(STORAGE_KEY);
+  let incomes = load(INCOME_KEY);
+  // Регулярні платежі; пошкоджені записи відкидаємо
+  let recurring = load(REC_KEY).filter(r => r && /^\d{4}-\d{2}$/.test(r.next) && r.day >= 1 && r.day <= 31);
+  let mode = 'expense';   // активний розділ: 'expense' | 'income'
+  let editingId = null;   // id запису, що редагується
+  let confirmId = null;   // id запису, що очікує підтвердження видалення
+
+  // Безпечне читання зі сховища
+  function load(key) {
+    try {
+      const data = JSON.parse(localStorage.getItem(key) || '[]');
+      return Array.isArray(data) ? data : [];
+    } catch (e) { return []; }
+  }
+  // Безпечний запис у сховище
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+      localStorage.setItem(INCOME_KEY, JSON.stringify(incomes));
+      localStorage.setItem(REC_KEY, JSON.stringify(recurring));
+    } catch (e) { /* сховище недоступне */ }
+  }
+
+  // Екранування тексту для вставки в HTML
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  // Активний набір категорій і записів залежно від розділу
+  const cats = () => mode === 'income' ? INCOME_CATEGORIES : CATEGORIES;
+  const cur = () => mode === 'income' ? incomes : expenses;
+  const catById = (id) => cats().find(c => c.id === id) || cats()[cats().length - 1];
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const money = (n) => n.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' грн';
+
+  // Сьогоднішня дата у локальному часовому поясі (YYYY-MM-DD)
+  function today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  // Форматування дати без переходу в UTC
+  function formatDate(s) {
+    const [y, m, d] = s.split('-');
+    return d + '.' + m + '.' + y;
+  }
+
+  // ---- Місячний бюджет ----
+  const BUDGET_KEY = 'expenses-budget-v1';
+  let budget = loadBudget();      // 0 — бюджет не задано
+  let budgetEditing = false;      // true — відкрито поле для зміни
+
+  function loadBudget() {
+    try {
+      const n = parseFloat(localStorage.getItem(BUDGET_KEY));
+      return n > 0 ? n : 0;
+    } catch (e) { return 0; }
+  }
+  function persistBudget() {
+    try {
+      if (budget > 0) localStorage.setItem(BUDGET_KEY, String(budget));
+      else localStorage.removeItem(BUDGET_KEY);
+    } catch (e) { /* сховище недоступне */ }
+  }
+  const num = (n) => n.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const monthLabel = (m) => { const [y, mm] = m.split('-'); return MONTHS[+mm - 1] + ' ' + y; };
+
+  // Бюджет рахується за місяць із фільтра або за місяць діапазону (якщо він в межах одного місяця),
+  // в інших випадках — за поточний. Фільтр категорії на бюджет не впливає.
+  function budgetMonth() {
+    const month = el.filterMonth.value, from = el.filterFrom.value, to = el.filterTo.value;
+    if (month) return month;
+    if (from && to && from.slice(0, 7) === to.slice(0, 7)) return from.slice(0, 7);
+    return today().slice(0, 7);
+  }
+  function renderBudget() {
+    const showForm = !(budget > 0) || budgetEditing;
+    el.budgetForm.hidden = !showForm;
+    el.budgetView.hidden = showForm;
+    el.budgetCancel.hidden = !(budget > 0);
+    el.budgetClear.hidden = !(budget > 0);
+    el.budgetSave.textContent = budget > 0 ? 'Зберегти' : 'Встановити';
+    if (showForm) return;
+
+    const month = budgetMonth();
+    const spent = round2(expenses.filter(e => e.date.slice(0, 7) === month)
+      .reduce((s, e) => s + e.amount, 0));
+    const over = spent > budget;
+    const pct = Math.min(100, spent / budget * 100);
+    const spentText = 'Витрачено ' + num(spent) + ' з ' + money(budget);
+    const leftText = over ? 'Перевищено на ' + money(round2(spent - budget))
+                          : 'Залишилось ' + money(round2(budget - spent));
+
+    el.budgetTitle.textContent = 'Бюджет · ' + monthLabel(month);
+    el.budgetFill.style.width = pct + '%';
+    el.budgetBar.classList.toggle('over', over);
+    el.budgetText.classList.toggle('over', over);
+    el.budgetBar.setAttribute('aria-valuenow', Math.round(pct));
+    el.budgetBar.setAttribute('aria-valuetext', spentText + '. ' + leftText);
+    el.budgetSpent.textContent = spentText;
+    el.budgetLeft.textContent = leftText;
+  }
+
+  // Баланс = доходи − витрати за обраний період (місяць, діапазон або весь час)
+  function renderBalance() {
+    const sum = (arr) => round2(arr.filter(inPeriod).reduce((s, e) => s + e.amount, 0));
+    const inc = sum(incomes), exp = sum(expenses), bal = round2(inc - exp);
+    el.balPeriod.textContent = periodLabel();
+    el.balance.textContent = money(bal);
+    el.balance.classList.toggle('neg', bal < 0);
+    el.balIncome.textContent = money(inc);
+    el.balExpense.textContent = money(exp);
+  }
+
+  function saveBudget() {
+    const v = round2(parseFloat(String(el.budgetInput.value).replace(',', '.')));
+    if (!(v > 0)) { el.budgetError.textContent = 'Вкажіть бюджет більше нуля.'; return; }
+    budget = v; budgetEditing = false;
+    el.budgetError.textContent = ''; el.budgetInput.value = '';
+    persistBudget(); renderBudget();
+    el.budgetEdit.focus();
+  }
+
+  // Заповнення випадаючих списків категорій
+  function fillCategories() {
+    el.category.length = 1;      // лишаємо лише пункт-підказку
+    el.filterCat.length = 1;
+    cats().forEach(c => {
+      el.category.add(new Option(c.name, c.id));
+      el.filterCat.add(new Option(c.name, c.id));
+    });
+  }
+  fillCategories();
+  fillRecCategories();
+  el.date.value = today();
+
+  // Збереження (додавання або редагування)
+  function save() {
+    const amount = round2(parseFloat(String(el.amount.value).replace(',', '.')));
+    const category = el.category.value;
+    const date = el.date.value;
+    const note = el.note.value.trim().slice(0, 80);
+
+    if (!(amount > 0)) return showError('Вкажіть суму більше нуля.');
+    if (!category) return showError('Оберіть категорію.');
+    if (!date) return showError('Вкажіть дату.');
+    showError('');
+
+    if (editingId) {
+      const item = cur().find(e => e.id === editingId);
+      if (item) Object.assign(item, { amount, category, date, note });
+    } else {
+      cur().push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        amount, category, date, note, created: Date.now() });
+    }
+    persist();
+    resetForm();
+    render();
+  }
+  function showError(msg) { el.error.textContent = msg; }
+
+  function resetForm() {
+    editingId = null;
+    el.amount.value = ''; el.category.value = ''; el.note.value = '';
+    el.date.value = today(); el.noteCount.textContent = '0';
+    el.save.textContent = 'Додати'; el.cancel.hidden = true;
+    showError('');
+  }
+
+  function startEdit(id) {
+    const item = cur().find(e => e.id === id);
+    if (!item) return;
+    editingId = id; confirmId = null;
+    el.amount.value = item.amount; el.category.value = item.category;
+    el.date.value = item.date; el.note.value = item.note || '';
+    el.noteCount.textContent = el.note.value.length;
+    el.save.textContent = 'Зберегти зміни'; el.cancel.hidden = false;
+    showError('');
+    el.amount.focus();
+    render();
+  }
+
+  // Період: місяць або діапазон дат (вони взаємовиключні). Дати 'YYYY-MM-DD' порівнюються як рядки.
+  function inPeriod(e) {
+    const month = el.filterMonth.value, from = el.filterFrom.value, to = el.filterTo.value;
+    return (!month || e.date.slice(0, 7) === month) && (!from || e.date >= from) && (!to || e.date <= to);
+  }
+  function periodLabel() {
+    const month = el.filterMonth.value, from = el.filterFrom.value, to = el.filterTo.value;
+    if (month) return monthLabel(month);
+    if (from && to) return formatDate(from) + ' – ' + formatDate(to);
+    if (from) return 'від ' + formatDate(from);
+    if (to) return 'до ' + formatDate(to);
+    return 'Усі місяці';
+  }
+  // Фільтрація за категорією та періодом
+  function filtered() {
+    const cat = el.filterCat.value;
+    return cur().filter(e => (!cat || e.category === cat) && inPeriod(e));
+  }
+
+  // Відсотки методом найбільших залишків (у сумі рівно 100)
+  function percentages(values, total) {
+    const raw = values.map(v => v / total * 100);
+    const floors = raw.map(Math.floor);
+    let rest = 100 - floors.reduce((a, b) => a + b, 0);
+    raw.map((v, i) => ({ i, r: v - floors[i] })).sort((a, b) => b.r - a.r)
+      .forEach(o => { if (rest > 0) { floors[o.i]++; rest--; } });
+    return floors;
+  }
+
+  // Оновлення списку місяців з наявних даних
+  function renderMonths() {
+    const current = el.filterMonth.value;
+    const months = [...new Set([...expenses, ...incomes].map(e => e.date.slice(0, 7)))].sort().reverse();
+    el.filterMonth.innerHTML = '<option value="">Усі місяці</option>';
+    months.forEach(m => {
+      const [y, mm] = m.split('-');
+      el.filterMonth.add(new Option(MONTHS[+mm - 1] + ' ' + y, m));
+    });
+    el.filterMonth.value = months.includes(current) ? current : '';
+  }
+
+  function render() {
+    renderMonths();
+    const L = LABELS[mode];
+    el.formTitle.textContent = L.form; el.sumTitle.textContent = L.sum; el.listTitle.textContent = L.list;
+    el.note.placeholder = L.note;
+    syncPage();
+    el.budgetBox.hidden = mode !== 'expense';   // бюджет стосується лише витрат
+    el.filterReset.hidden = !(el.filterFrom.value || el.filterTo.value);
+    const items = filtered().sort((a, b) => b.date.localeCompare(a.date) || b.created - a.created);
+    const total = round2(items.reduce((s, e) => s + e.amount, 0));
+    el.total.textContent = money(total);
+    renderBudget();
+    renderBalance();
+    renderWeek();
+
+    // Суми за категоріями (тільки ненульові)
+    const sums = cats().map(c => ({ c, sum: round2(items.filter(e => e.category === c.id).reduce((s, e) => s + e.amount, 0)) }))
+      .filter(x => x.sum > 0);
+    const pcts = total > 0 ? percentages(sums.map(x => x.sum), total) : [];
+
+    // Таблиця категорій
+    el.catTable.innerHTML = sums.length ? '<table><thead><tr><th>Категорія</th><th>Сума</th><th>Частка</th></tr></thead><tbody>' +
+      sums.map((x, i) => `<tr><td><span class="dot" style="background:${x.c.color}"></span>${escapeHtml(x.c.name)}</td><td>${money(x.sum)}</td><td>${pcts[i]}%</td></tr>`).join('') +
+      '</tbody></table>' : '<div class="empty">Немає даних для діаграми.</div>';
+
+    // Кругова діаграма на conic-gradient
+    let acc = 0;
+    const stops = sums.map(x => {
+      const start = acc / total * 360; acc += x.sum;
+      return `${x.c.color} ${start}deg ${acc / total * 360}deg`;
+    });
+    el.chart.style.background = stops.length ? `conic-gradient(${stops.join(',')})` : '';
+    el.chartCount.textContent = items.length;
+
+    // Список витрат
+    el.list.innerHTML = items.map(e => {
+      const c = catById(e.category);
+      const actions = confirmId === e.id
+        ? `<span>Видалити?</span><button type="button" class="small danger" data-act="yes" data-id="${e.id}">Так</button><button type="button" class="small" data-act="no" data-id="${e.id}">Ні</button>`
+        : `<button type="button" class="small" data-act="edit" data-id="${e.id}">Редагувати</button><button type="button" class="small danger" data-act="del" data-id="${e.id}">Видалити</button>`;
+      return `<li>
+        <div><div class="item-cat"><span class="dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</div>
+        <div class="item-meta">${formatDate(e.date)}${e.note ? ' · ' + escapeHtml(e.note) : ''}${e.rec ? ' · регулярний' : ''}</div></div>
+        <div class="item-sum">${money(e.amount)}</div>
+        <div class="item-actions">${actions}</div></li>`;
+    }).join('');
+
+    // Порожні стани
+    if (!cur().length) el.empty.textContent = LABELS[mode].empty;
+    else if (!items.length) el.empty.textContent = 'За обраним фільтром нічого не знайдено.';
+    else el.empty.textContent = '';
+  }
+
+  // Обробники подій
+  el.save.addEventListener('click', save);
+  el.cancel.addEventListener('click', () => { resetForm(); render(); });
+  [el.amount, el.category, el.date, el.note].forEach(i =>
+    i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } }));
+  el.note.addEventListener('input', () => { el.noteCount.textContent = el.note.value.length; });
+  el.filterCat.addEventListener('change', render);
+  el.filterMonth.addEventListener('change', () => {
+    if (el.filterMonth.value) { el.filterFrom.value = ''; el.filterTo.value = ''; }   // місяць скидає діапазон
+    render();
+  });
+  // Діапазон дат: «до» не може бути раніше за «від»; діапазон скидає вибраний місяць
+  function onRange(changed) {
+    const from = el.filterFrom.value, to = el.filterTo.value;
+    if (from && to && from > to) { if (changed === 'from') el.filterTo.value = from; else el.filterFrom.value = to; }
+    if (el.filterFrom.value || el.filterTo.value) el.filterMonth.value = '';
+    render();
+  }
+  el.filterFrom.addEventListener('change', () => onRange('from'));
+  el.filterTo.addEventListener('change', () => onRange('to'));
+  el.filterReset.addEventListener('click', () => { el.filterFrom.value = ''; el.filterTo.value = ''; render(); el.filterFrom.focus(); });
+
+  // ---- Регулярні платежі ----
+  let recPage = false;          // true — відкрито розділ «Регулярні»
+  let recEditingId = null, recConfirmId = null;
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const pad = (n) => String(n).padStart(2, '0');
+
+  function syncPage() {
+    const other = recPage || catPage || dataPage;
+    el.mainView.hidden = other; el.recView.hidden = !recPage; el.catView.hidden = !catPage; el.dataView.hidden = !dataPage;
+    el.tabExpense.setAttribute('aria-pressed', !other && mode === 'expense');
+    el.tabIncome.setAttribute('aria-pressed', !other && mode === 'income');
+    el.tabRec.setAttribute('aria-pressed', recPage);
+    el.tabCat.setAttribute('aria-pressed', catPage);
+    el.tabData.setAttribute('aria-pressed', dataPage);
+  }
+  // Дата платежу в місяці 'YYYY-MM' (день обмежується довжиною місяця)
+  function dueDate(month, day) {
+    const [y, m] = month.split('-').map(Number);
+    return month + '-' + pad(Math.min(day, new Date(y, m, 0).getDate()));
+  }
+  function nextMonth(month) {
+    const [y, m] = month.split('-').map(Number);
+    return m === 12 ? (y + 1) + '-01' : y + '-' + pad(m + 1);
+  }
+  // Перший платіж — найближчий вказаний день (сьогодні або пізніше)
+  function firstMonth(day) {
+    const t = today(), month = t.slice(0, 7);
+    return dueDate(month, day) >= t ? month : nextMonth(month);
+  }
+  // Додає у витрати всі платежі, строк яких настав (зокрема пропущені, поки сторінку не відкривали)
+  function applyRecurring() {
+    const t = today();
+    let added = false;
+    recurring.forEach(r => {
+      for (let i = 0; i < 240 && dueDate(r.next, r.day) <= t; i++) {
+        expenses.push({ id: uid(), amount: r.amount, category: r.category, date: dueDate(r.next, r.day),
+          note: r.note || '', created: Date.now(), rec: r.id });
+        r.next = nextMonth(r.next);
+        added = true;
+      }
+    });
+    if (added) persist();
+    return added;
+  }
+
+  function showRecError(msg) { el.recError.textContent = msg; }
+  function saveRec() {
+    const amount = round2(parseFloat(String(el.recAmount.value).replace(',', '.')));
+    const category = el.recCategory.value;
+    const day = parseInt(el.recDay.value, 10);
+    const note = el.recNote.value.trim().slice(0, 80);
+    if (!(amount > 0)) return showRecError('Вкажіть суму більше нуля.');
+    if (!category) return showRecError('Оберіть категорію.');
+    if (!(day >= 1 && day <= 31)) return showRecError('День місяця — число від 1 до 31.');
+    showRecError('');
+    if (recEditingId) {
+      const r = recurring.find(x => x.id === recEditingId);
+      if (r) Object.assign(r, { amount, category, day, note });   // зміни діють з наступного платежу
+    } else {
+      recurring.push({ id: uid(), amount, category, day, note, next: firstMonth(day) });
+    }
+    persist(); resetRecForm(); applyRecurring(); renderRec(); render();
+  }
+  function resetRecForm() {
+    recEditingId = null;
+    el.recAmount.value = ''; el.recCategory.value = ''; el.recDay.value = ''; el.recNote.value = '';
+    el.recSave.textContent = 'Додати'; el.recCancel.hidden = true;
+    showRecError('');
+  }
+  function startEditRec(id) {
+    const r = recurring.find(x => x.id === id);
+    if (!r) return;
+    recEditingId = id; recConfirmId = null;
+    el.recAmount.value = r.amount; el.recCategory.value = r.category;
+    el.recDay.value = r.day; el.recNote.value = r.note || '';
+    el.recSave.textContent = 'Зберегти зміни'; el.recCancel.hidden = false;
+    showRecError('');
+    el.recAmount.focus();
+    renderRec();
+  }
+  function renderRec() {
+    const total = round2(recurring.reduce((s, r) => s + r.amount, 0));
+    el.recTotal.textContent = recurring.length ? 'Разом щомісяця: ' + money(total) : '';
+    el.recList.innerHTML = [...recurring].sort((a, b) => a.day - b.day).map(r => {
+      const c = CATEGORIES.find(x => x.id === r.category) || CATEGORIES[CATEGORIES.length - 1];
+      const actions = recConfirmId === r.id
+        ? `<span>Видалити?</span><button type="button" class="small danger" data-act="yes" data-id="${r.id}">Так</button><button type="button" class="small" data-act="no" data-id="${r.id}">Ні</button>`
+        : `<button type="button" class="small" data-act="edit" data-id="${r.id}">Редагувати</button><button type="button" class="small danger" data-act="del" data-id="${r.id}">Видалити</button>`;
+      return `<li>
+        <div><div class="item-cat"><span class="dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</div>
+        <div class="item-meta">${r.note ? escapeHtml(r.note) + ' · ' : ''}щомісяця, ${r.day}-го числа · наступний: ${formatDate(dueDate(r.next, r.day))}</div></div>
+        <div class="item-sum">${money(r.amount)}</div>
+        <div class="item-actions">${actions}</div></li>`;
+    }).join('');
+    el.recEmpty.textContent = recurring.length ? '' : 'Регулярних платежів поки немає. Додайте підписку, оренду чи інтернет.';
+  }
+
+  el.recSave.addEventListener('click', saveRec);
+  el.recCancel.addEventListener('click', () => { resetRecForm(); renderRec(); });
+  [el.recAmount, el.recCategory, el.recDay, el.recNote].forEach(i =>
+    i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); saveRec(); } }));
+  el.recList.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    switch (btn.dataset.act) {
+      case 'edit': startEditRec(id); break;
+      case 'del': recConfirmId = id; renderRec(); break;
+      case 'no': recConfirmId = null; renderRec(); break;
+      case 'yes':
+        recurring = recurring.filter(r => r.id !== id);   // уже додані витрати лишаються
+        recConfirmId = null;
+        if (recEditingId === id) resetRecForm();
+        persist(); renderRec(); break;
+    }
+  });
+  // Якщо вкладку тримали відкритою до нового дня — підхоплюємо платежі
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && applyRecurring()) { renderRec(); render(); }
+  });
+
+  // ---- Власні категорії ----
+  let catPage = false;          // true — відкрито розділ «Категорії»
+  let catEditing = null;        // { kind, id } під час редагування
+  let catConfirm = null;        // { kind, id } очікує підтвердження видалення
+  const PALETTE = ['#d9895b', '#5b8fd9', '#8a6fb5', '#d95b6f', '#e0b43a', '#3f9e8a', '#c46fa8', '#6f8f3a', '#4aa3b5', '#a0674b'];
+  const catList = (kind) => kind === 'income' ? INCOME_CATEGORIES : CATEGORIES;
+  // Перший колір палітри, який ще не використано в цьому типі
+  const nextColor = (kind) => PALETTE.find(p => !catList(kind).some(c => c.color.toLowerCase() === p))
+    || PALETTE[catList(kind).length % PALETTE.length];
+
+  function persistCats() {
+    try { localStorage.setItem(CATS_KEY, JSON.stringify({ expense: CATEGORIES, income: INCOME_CATEGORIES })); }
+    catch (e) { /* сховище недоступне */ }
+  }
+  function fillRecCategories() {
+    el.recCategory.length = 1;
+    CATEGORIES.forEach(c => el.recCategory.add(new Option(c.name, c.id)));
+  }
+  // Оновлює всі випадаючі списки категорій, зберігаючи вибране
+  function refreshCategories() {
+    const sels = [el.category, el.filterCat, el.recCategory];
+    const old = sels.map(x => x.value);
+    fillCategories(); fillRecCategories();
+    sels.forEach((x, i) => { x.value = old[i]; if (x.selectedIndex < 0) x.value = ''; });
+  }
+  function showCatError(msg) { el.catError.textContent = msg; }
+
+  function saveCat() {
+    const kind = el.catKind.value;
+    const name = el.catName.value.trim().slice(0, 30);
+    const color = el.catColor.value;
+    const list = catList(kind);
+    if (!name) return showCatError('Вкажіть назву категорії.');
+    if (list.some(c => c.name.toLowerCase() === name.toLowerCase() && !(catEditing && c.id === catEditing.id)))
+      return showCatError('Категорія з такою назвою вже є.');
+    showCatError('');
+    if (catEditing) {
+      const c = list.find(x => x.id === catEditing.id);
+      if (c) Object.assign(c, { name, color });
+    } else {
+      list.splice(list.length - 1, 0, { id: 'c' + uid(), name, color });   // перед «Інше»
+    }
+    persistCats(); resetCatForm(); refreshCategories(); renderCats(); renderRec(); render();
+  }
+  function resetCatForm() {
+    catEditing = null;
+    el.catKind.disabled = false; el.catName.value = ''; el.catColor.value = nextColor(el.catKind.value);
+    el.catSave.textContent = 'Додати'; el.catCancel.hidden = true;
+    showCatError('');
+  }
+  function startEditCat(kind, id) {
+    const c = catList(kind).find(x => x.id === id);
+    if (!c) return;
+    catEditing = { kind, id }; catConfirm = null;
+    el.catKind.value = kind; el.catKind.disabled = true;   // тип змінювати не можна
+    el.catName.value = c.name; el.catColor.value = c.color;
+    el.catSave.textContent = 'Зберегти зміни'; el.catCancel.hidden = false;
+    showCatError('');
+    el.catName.focus();
+    renderCats();
+  }
+  // Видалення: записи цієї категорії переходять в «Інше»
+  function deleteCat(kind, id) {
+    const list = catList(kind), i = list.findIndex(c => c.id === id);
+    if (id === 'other' || i < 0) return;
+    list.splice(i, 1);
+    const fix = (arr) => arr.forEach(e => { if (e.category === id) e.category = 'other'; });
+    if (kind === 'income') fix(incomes); else { fix(expenses); fix(recurring); }
+    if (catEditing && catEditing.kind === kind && catEditing.id === id) resetCatForm();
+    persist(); persistCats();
+  }
+  function renderCats() {
+    ['expense', 'income'].forEach(kind => {
+      const records = kind === 'income' ? incomes : expenses;
+      (kind === 'income' ? el.catListIncome : el.catListExpense).innerHTML = catList(kind).map(c => {
+        const d = `data-kind="${kind}" data-id="${escapeHtml(c.id)}"`;
+        const confirming = catConfirm && catConfirm.kind === kind && catConfirm.id === c.id;
+        const actions = confirming
+          ? `<span>Видалити? Записи перейдуть в «Інше».</span><button type="button" class="small danger" data-act="yes" ${d}>Так</button><button type="button" class="small" data-act="no" ${d}>Ні</button>`
+          : `<button type="button" class="small" data-act="edit" ${d}>Редагувати</button>`
+            + (c.id === 'other' ? '' : `<button type="button" class="small danger" data-act="del" ${d}>Видалити</button>`);
+        return `<li>
+          <div><div class="item-cat"><span class="dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</div>
+          <div class="item-meta">Записів: ${records.filter(e => e.category === c.id).length}</div></div>
+          <div class="item-actions">${actions}</div></li>`;
+      }).join('');
+    });
+  }
+  function onCatClick(ev) {
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    const { kind, id } = btn.dataset;
+    switch (btn.dataset.act) {
+      case 'edit': startEditCat(kind, id); break;
+      case 'del': catConfirm = { kind, id }; renderCats(); break;
+      case 'no': catConfirm = null; renderCats(); break;
+      case 'yes':
+        catConfirm = null; deleteCat(kind, id);
+        refreshCategories(); renderCats(); renderRec(); render(); break;
+    }
+  }
+  el.catSave.addEventListener('click', saveCat);
+  el.catCancel.addEventListener('click', () => { resetCatForm(); renderCats(); });
+  el.catKind.addEventListener('change', () => { if (!catEditing) el.catColor.value = nextColor(el.catKind.value); });
+  el.catName.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); saveCat(); } });
+  el.catListExpense.addEventListener('click', onCatClick);
+  el.catListIncome.addEventListener('click', onCatClick);
+
+  // ---- Підсумок за тиждень (пн–нд) ----
+  let weekOffset = 0;   // 0 — поточний тиждень, -1 — попередній
+  const isoDate = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  function renderWeek() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + weekOffset * 7);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    const from = isoDate(start), to = isoDate(end);
+    const sum = (arr) => round2(arr.filter(e => e.date >= from && e.date <= to).reduce((s, e) => s + e.amount, 0));
+    const inc = sum(incomes), exp = sum(expenses), bal = round2(inc - exp);
+    el.weekPeriod.textContent = formatDate(from).slice(0, 5) + ' – ' + formatDate(to);
+    el.weekExpense.textContent = money(exp);
+    el.weekIncome.textContent = money(inc);
+    el.weekBalance.textContent = money(bal);
+    el.weekBalance.classList.toggle('neg', bal < 0);
+    el.weekNext.disabled = weekOffset >= 0;   // майбутні тижні не переглядаємо
+  }
+  el.weekPrev.addEventListener('click', () => { weekOffset--; renderWeek(); });
+  el.weekNext.addEventListener('click', () => {
+    if (weekOffset < 0) weekOffset++;
+    renderWeek();
+    if (el.weekNext.disabled) el.weekPrev.focus();
+  });
+
+  // ---- Резервна копія, імпорт і CSV ----
+  let dataPage = false;         // true — відкрито розділ «Дані»
+  let pendingImport = null;     // розібраний файл, що чекає підтвердження
+
+  // Завантаження файлу з браузера (працює без сервера)
+  function download(filename, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function bkMessage(text, isError) {
+    el.bkMsg.textContent = text;
+    el.bkMsg.className = isError ? 'error' : 'item-meta';
+  }
+
+  function exportBackup() {
+    const data = {
+      app: 'expense-tracker', version: 1, exported: new Date().toISOString(),
+      expenses, incomes, recurring, budget,
+      categories: { expense: CATEGORIES, income: INCOME_CATEGORIES }
+    };
+    const name = 'oblik-backup-' + today() + '.json';
+    download(name, JSON.stringify(data, null, 2), 'application/json');
+    bkMessage('Копію створено: ' + name);
+  }
+
+  // Перевірка файлу: некоректні записи відкидаємо, id обмежуємо безпечними символами
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/, SAFE_ID = /^[\w-]{1,40}$/;
+  function cleanRecords(list) {
+    const seen = new Set();
+    return (Array.isArray(list) ? list : []).filter(e => e && typeof e.id === 'string' && SAFE_ID.test(e.id)
+        && typeof e.category === 'string' && Number.isFinite(e.amount) && e.amount > 0 && ISO_DATE.test(e.date))
+      .filter(e => !seen.has(e.id) && seen.add(e.id))
+      .map(e => ({ ...e, note: typeof e.note === 'string' ? e.note.slice(0, 80) : '',
+        created: Number.isFinite(e.created) ? e.created : 0 }));
+  }
+  function cleanRecurring(list) {
+    const seen = new Set();
+    return (Array.isArray(list) ? list : []).filter(r => r && typeof r.id === 'string' && SAFE_ID.test(r.id)
+        && typeof r.category === 'string' && Number.isFinite(r.amount) && r.amount > 0
+        && Number.isInteger(r.day) && r.day >= 1 && r.day <= 31 && /^\d{4}-\d{2}$/.test(r.next))
+      .filter(r => !seen.has(r.id) && seen.add(r.id))
+      .map(r => ({ ...r, note: typeof r.note === 'string' ? r.note.slice(0, 80) : '' }));
+  }
+  function parseBackup(text) {
+    const d = JSON.parse(text);
+    if (!d || d.app !== 'expense-tracker' || !Array.isArray(d.expenses) || !Array.isArray(d.incomes))
+      throw new Error('Це не файл резервної копії цього застосунку.');
+    return {
+      expenses: cleanRecords(d.expenses), incomes: cleanRecords(d.incomes), recurring: cleanRecurring(d.recurring),
+      categories: d.categories || null, budget: d.budget > 0 ? round2(d.budget) : 0
+    };
+  }
+
+  // Повна заміна поточних даних даними з файлу
+  function applyImport(d) {
+    expenses = d.expenses; incomes = d.incomes; recurring = d.recurring;
+    budget = d.budget; budgetEditing = false;
+    applyCats(d.categories);
+    // записи з невідомою категорією переходять в «Інше»
+    const fix = (arr, kind) => arr.forEach(e => { if (!catList(kind).some(c => c.id === e.category)) e.category = 'other'; });
+    fix(expenses, 'expense'); fix(recurring, 'expense'); fix(incomes, 'income');
+    persist(); persistCats(); persistBudget();
+    // скидання стану інтерфейсу
+    editingId = null; confirmId = null; recConfirmId = null; catConfirm = null;
+    el.filterCat.value = ''; el.filterMonth.value = ''; el.filterFrom.value = ''; el.filterTo.value = '';
+    refreshCategories(); resetForm(); resetRecForm(); resetCatForm();
+    applyRecurring(); renderCats(); renderRec(); render();
+  }
+
+  // CSV для Excel: роздільник «;», кома в сумах, UTF-8 з BOM
+  function csvCell(v) {
+    let t = String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;   // захист від формул в Excel
+    return /[;"\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function exportCsv() {
+    const rows = [];
+    [['Витрата', expenses, 'expense'], ['Дохід', incomes, 'income']].forEach(([label, arr, kind]) => {
+      arr.forEach(e => {
+        const c = catList(kind).find(x => x.id === e.category) || catList(kind)[catList(kind).length - 1];
+        rows.push({ e, row: [label, e.date, c.name, String(e.amount).replace('.', ','), e.note || '', e.rec ? 'так' : ''] });
+      });
+    });
+    rows.sort((a, b) => a.e.date.localeCompare(b.e.date) || (a.e.created || 0) - (b.e.created || 0));
+    const lines = [['Тип', 'Дата', 'Категорія', 'Сума', 'Нотатка', 'Регулярний'], ...rows.map(r => r.row)]
+      .map(r => r.map(csvCell).join(';'));
+    download('oblik-zapysy-' + today() + '.csv', '\uFEFF' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+    bkMessage('Таблицю створено, записів: ' + rows.length + '.');
+  }
+
+  el.bkExport.addEventListener('click', exportBackup);
+  el.csvExport.addEventListener('click', exportCsv);
+  el.bkImport.addEventListener('click', () => { el.bkFile.value = ''; el.bkFile.click(); });
+  el.bkFile.addEventListener('change', () => {
+    const file = el.bkFile.files[0];
+    if (!file) return;
+    pendingImport = null; el.bkConfirm.hidden = true;
+    if (file.size > 10e6) return bkMessage('Файл завеликий (понад 10 МБ).', true);
+    file.text().then(text => {
+      pendingImport = parseBackup(text);
+      el.bkSummary.textContent = 'У файлі — витрат: ' + pendingImport.expenses.length
+        + ', доходів: ' + pendingImport.incomes.length
+        + ', регулярних платежів: ' + pendingImport.recurring.length
+        + ', бюджет: ' + (pendingImport.budget ? money(pendingImport.budget) : 'не задано')
+        + '. Усі поточні дані буде замінено.';
+      bkMessage('');
+      el.bkConfirm.hidden = false;
+      el.bkYes.focus();
+    }).catch(err => bkMessage(err instanceof SyntaxError ? 'Не вдалося прочитати файл: це не JSON.'
+      : (err.message || 'Не вдалося прочитати файл.'), true));
+  });
+  el.bkYes.addEventListener('click', () => {
+    if (!pendingImport) return;
+    applyImport(pendingImport);
+    pendingImport = null; el.bkConfirm.hidden = true;
+    bkMessage('Дані відновлено з файлу.');
+    el.bkImport.focus();
+  });
+  el.bkNo.addEventListener('click', () => {
+    pendingImport = null; el.bkConfirm.hidden = true; bkMessage('');
+    el.bkImport.focus();
+  });
+
+  // ---- Тема оформлення ----
+  // Без ручного вибору діє системна тема; вибір зберігається і застосовується ще в <head>.
+  const THEME_KEY = 'theme-v1';
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function currentTheme() {
+    return document.documentElement.getAttribute('data-theme') || (darkQuery && darkQuery.matches ? 'dark' : 'light');
+  }
+  function syncTheme() {
+    el.themeToggle.textContent = currentTheme() === 'dark' ? 'Світла тема' : 'Темна тема';
+  }
+  el.themeToggle.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* сховище недоступне */ }
+    syncTheme();
+  });
+  if (darkQuery) darkQuery.addEventListener('change', syncTheme);
+
+  // Перемикач розділів «Витрати / Доходи»
+  const LABELS = {
+    expense: { form: 'Нова витрата', sum: 'Загальна сума витрат', list: 'Витрати', note: 'Наприклад: обід',
+      empty: 'Витрат поки немає. Додайте першу за допомогою форми.' },
+    income: { form: 'Новий дохід', sum: 'Загальна сума доходів', list: 'Доходи', note: 'Наприклад: аванс',
+      empty: 'Доходів поки немає. Додайте перший за допомогою форми.' }
+  };
+  function setMode(m) {
+    if (m === mode) return;
+    mode = m; confirmId = null;
+    fillCategories();
+    el.filterCat.value = '';
+    resetForm();   // скидає й режим редагування
+    render();
+  }
+  function openTab(m) {
+    recPage = false; catPage = false; dataPage = false;
+    if (m === mode) syncPage(); else setMode(m);
+  }
+  el.tabExpense.addEventListener('click', () => openTab('expense'));
+  el.tabIncome.addEventListener('click', () => openTab('income'));
+  el.tabRec.addEventListener('click', () => { recPage = true; catPage = false; dataPage = false; renderRec(); syncPage(); });
+  el.tabCat.addEventListener('click', () => { catPage = true; recPage = false; dataPage = false; renderCats(); syncPage(); });
+  el.tabData.addEventListener('click', () => { dataPage = true; recPage = false; catPage = false; syncPage(); });
+
+  // Бюджет: збереження, зміна, скасування, видалення
+  el.budgetSave.addEventListener('click', saveBudget);
+  el.budgetInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); saveBudget(); } });
+  el.budgetEdit.addEventListener('click', () => {
+    budgetEditing = true;
+    el.budgetInput.value = budget; el.budgetError.textContent = '';
+    renderBudget();
+    el.budgetInput.focus(); el.budgetInput.select();
+  });
+  el.budgetCancel.addEventListener('click', () => {
+    budgetEditing = false;
+    el.budgetInput.value = ''; el.budgetError.textContent = '';
+    renderBudget();
+    el.budgetEdit.focus();
+  });
+  el.budgetClear.addEventListener('click', () => {
+    budget = 0; budgetEditing = false;
+    el.budgetInput.value = ''; el.budgetError.textContent = '';
+    persistBudget(); renderBudget();
+    el.budgetInput.focus();
+  });
+
+  // Делегування кліків у списку
+  el.list.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    switch (btn.dataset.act) {
+      case 'edit': startEdit(id); break;
+      case 'del': confirmId = id; render(); break;
+      case 'no': confirmId = null; render(); break;
+      case 'yes':
+        if (mode === 'income') incomes = incomes.filter(e => e.id !== id);
+        else expenses = expenses.filter(e => e.id !== id);
+        confirmId = null;
+        if (editingId === id) resetForm();
+        persist(); render(); break;
+    }
+  });
+
+  syncTheme();
+  applyRecurring();
+  resetCatForm();
+  renderCats();
+  renderRec();
+  render();
+</script>
+</body>
+</html>
